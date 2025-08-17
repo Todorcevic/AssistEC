@@ -1,0 +1,336 @@
+@page "/ai-assistant"
+@using AssistEC.Models
+@using AssistEC.Services
+@rendermode InteractiveServer
+@inject ISharePointService SharePointService
+@inject OpenAIService OpenAIService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Asistente de IA - SharePoint</PageTitle>
+
+<div class="container-fluid h-100">
+    <div class="row h-100">
+        <div class="col-md-8">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-robot me-2"></i>
+                        Asistente de IA para SharePoint
+                    </h4>
+                </div>
+                <div class="card-body d-flex flex-column" style="height: 70vh;">
+                    <div class="chat-container flex-grow-1 overflow-auto mb-3" id="chatContainer">
+                        @if (!messages.Any())
+                        {
+                            <div class="text-center text-muted p-4">
+                                <i class="fas fa-comments fa-3x mb-3"></i>
+                                <p>¡Hola! Soy tu asistente de IA. Puedo ayudarte a buscar y analizar documentos en SharePoint.</p>
+                                <p>Prueba preguntándome algo como: "Busca documentos sobre presupuesto" o "¿Qué información tienes sobre el proyecto X?"</p>
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var message in messages)
+                            {
+                                <div class="message @(message.Role == "user" ? "user-message" : "assistant-message") mb-3">
+                                    <div class="message-header">
+                                        <strong>
+                                            @if (message.Role == "user")
+                                            {
+                                                <i class="fas fa-user me-1"></i>@:Tú
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-robot me-1"></i>@:Asistente IA
+                                            }
+                                        </strong>
+                                        <small class="text-muted ms-2">@message.Timestamp.ToString("HH:mm")</small>
+                                    </div>
+                                    <div class="message-content">
+                                        @((MarkupString)FormatMessageContent(message.Content))
+                                    </div>
+                                    @if (message.Sources?.Any() == true)
+                                    {
+                                        <div class="message-sources mt-2">
+                                            <small class="text-muted">
+                                                <i class="fas fa-file-alt me-1"></i>
+                                                Fuentes: @string.Join(", ", message.Sources)
+                                            </small>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+                        
+                        @if (isLoading)
+                        {
+                            <div class="message assistant-message mb-3">
+                                <div class="message-header">
+                                    <strong><i class="fas fa-robot me-1"></i>Asistente IA</strong>
+                                </div>
+                                <div class="message-content">
+                                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                                    Analizando documentos y preparando respuesta...
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    
+                    <div class="input-group">
+                        <input @bind="currentMessage" 
+                               @onkeypress="OnKeyPress" 
+                               class="form-control" 
+                               placeholder="Escribe tu pregunta aquí..." 
+                               disabled="@isLoading" />
+                        <button @onclick="SendMessage" 
+                                class="btn btn-primary" 
+                                disabled="@(isLoading || string.IsNullOrWhiteSpace(currentMessage))">
+                            @if (isLoading)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            }
+                            else
+                            {
+                                <i class="fas fa-paper-plane me-1"></i>
+                            }
+                            Enviar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-alt me-2"></i>
+                        Documentos Recientes
+                    </h5>
+                </div>
+                <div class="card-body overflow-auto">
+                    @if (recentDocuments.Any())
+                    {
+                        @foreach (var doc in recentDocuments)
+                        {
+                            <div class="document-item p-2 mb-2 border rounded">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <h6 class="mb-1">@doc.Name</h6>
+                                        <small class="text-muted">
+                                            Por @doc.Author<br>
+                                            @doc.LastModified.ToString("dd/MM/yyyy HH:mm")
+                                        </small>
+                                    </div>
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
+                                                type="button" 
+                                                data-bs-toggle="dropdown">
+                                            <i class="fas fa-ellipsis-v"></i>
+                                        </button>
+                                        <ul class="dropdown-menu">
+                                            <li>
+                                                <a class="dropdown-item" 
+                                                   href="@doc.WebUrl" 
+                                                   target="_blank">
+                                                    <i class="fas fa-external-link-alt me-1"></i>
+                                                    Abrir documento
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <button class="dropdown-item" 
+                                                        @onclick="() => SummarizeDocument(doc)">
+                                                    <i class="fas fa-file-text me-1"></i>
+                                                    Resumir documento
+                                                </button>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted p-3">
+                            <i class="fas fa-folder-open fa-2x mb-2"></i>
+                            <p>Cargando documentos recientes...</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .chat-container {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 0.375rem;
+    }
+
+    .message {
+        max-width: 85%;
+    }
+
+    .user-message {
+        margin-left: auto;
+    }
+
+    .user-message .message-content {
+        background-color: #007bff;
+        color: white;
+        padding: 0.75rem;
+        border-radius: 1rem 1rem 0.25rem 1rem;
+    }
+
+    .assistant-message .message-content {
+        background-color: white;
+        border: 1px solid #dee2e6;
+        padding: 0.75rem;
+        border-radius: 1rem 1rem 1rem 0.25rem;
+    }
+
+    .message-header {
+        margin-bottom: 0.25rem;
+    }
+
+    .document-item:hover {
+        background-color: #f8f9fa;
+        cursor: pointer;
+    }
+</style>
+
+@code {
+    private List<ChatMessage> messages = new();
+    private List<SharePointDocument> recentDocuments = new();
+    private string currentMessage = string.Empty;
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            recentDocuments = await SharePointService.GetRecentDocumentsAsync(10);
+        }
+        catch (Exception ex)
+        {
+            // Log error - in production, you'd want proper error handling
+            Console.WriteLine($"Error loading recent documents: {ex.Message}");
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(currentMessage) || isLoading)
+            return;
+
+        var userMessage = new ChatMessage
+        {
+            Role = "user",
+            Content = currentMessage.Trim()
+        };
+
+        messages.Add(userMessage);
+        var query = currentMessage.Trim();
+        currentMessage = string.Empty;
+        isLoading = true;
+
+        StateHasChanged();
+        await ScrollToBottom();
+
+        try
+        {
+            // Generar consulta de búsqueda optimizada
+            var searchQuery = await OpenAIService.GenerateSearchQueryAsync(query);
+            
+            // Buscar documentos relevantes
+            var documents = await SharePointService.SearchDocumentsAsync(searchQuery);
+            
+            // Procesar la consulta con OpenAI
+            var response = await OpenAIService.ProcessQueryWithDocumentsAsync(query, documents);
+            
+            var assistantMessage = new ChatMessage
+            {
+                Role = "assistant",
+                Content = response,
+                Sources = documents.Select(d => d.Name).ToList()
+            };
+
+            messages.Add(assistantMessage);
+        }
+        catch (Exception ex)
+        {
+            var errorMessage = new ChatMessage
+            {
+                Role = "assistant",
+                Content = $"Lo siento, ocurrió un error al procesar tu consulta: {ex.Message}"
+            };
+            messages.Add(errorMessage);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+            await ScrollToBottom();
+        }
+    }
+
+    private async Task SummarizeDocument(SharePointDocument document)
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var summary = await OpenAIService.SummarizeDocumentAsync(document);
+            
+            var summaryMessage = new ChatMessage
+            {
+                Role = "assistant",
+                Content = $"**Resumen del documento '{document.Name}':**\n\n{summary}",
+                Sources = new List<string> { document.Name }
+            };
+
+            messages.Add(summaryMessage);
+        }
+        catch (Exception ex)
+        {
+            var errorMessage = new ChatMessage
+            {
+                Role = "assistant",
+                Content = $"No se pudo generar el resumen del documento: {ex.Message}"
+            };
+            messages.Add(errorMessage);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+            await ScrollToBottom();
+        }
+    }
+
+    private async Task OnKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendMessage();
+        }
+    }
+
+    private async Task ScrollToBottom()
+    {
+        await Task.Delay(100);
+        await JSRuntime.InvokeVoidAsync("scrollToBottom", "chatContainer");
+    }
+
+    private string FormatMessageContent(string content)
+    {
+        // Convertir markdown básico a HTML
+        content = content.Replace("**", "<strong>").Replace("**", "</strong>");
+        content = content.Replace("\n", "<br>");
+        return content;
+    }
+}
