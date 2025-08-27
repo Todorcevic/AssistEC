@@ -1,9 +1,3 @@
-using Microsoft.Graph.Models;
-
 namespace AssistEC.Models;
 
-// Modelos auxiliares para Microsoft Graph Search API
-public class SearchPostRequestBody
-{
-    public List<SearchRequest> Requests { get; set; } = new();
-}
+// Placeholder para futuros modelos auxiliares si se necesitan

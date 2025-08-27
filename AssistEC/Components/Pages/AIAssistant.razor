@@ -246,7 +246,8 @@
             var searchQuery = await OpenAIService.GenerateSearchQueryAsync(query);
             
             // Buscar documentos relevantes
-            var documents = await SharePointService.SearchDocumentsAsync(searchQuery);
+            var documents = await SharePointService.SearchDocumentsAsync(searchQuery); // Usar documentos relevantes
+            //var documents = await SharePointService.GetRecentDocumentsAsync(); // Alternativa: usar documentos recientes (Todos)
             
             // Procesar la consulta con OpenAI
             var response = await OpenAIService.ProcessQueryWithDocumentsAsync(query, documents);
