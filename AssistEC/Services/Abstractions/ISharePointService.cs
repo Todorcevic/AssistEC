@@ -1,6 +1,6 @@
 using AssistEC.Models;
 
-namespace AssistEC.Services;
+namespace AssistEC.Services.Abstractions;
 
 public interface ISharePointService
 {

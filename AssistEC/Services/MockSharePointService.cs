@@ -1,4 +1,5 @@
 using AssistEC.Models;
+using AssistEC.Services.Abstractions;
 
 namespace AssistEC.Services;
 
@@ -24,11 +25,25 @@ public class MockSharePointService : ISharePointService
             return _mockDocuments.Take(5).ToList();
         }
 
-        // Búsqueda simple por palabras clave en nombre y contenido
+        // Búsqueda mejorada por palabras clave en nombre y contenido
         var keywords = query.ToLower().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         
+        // Filtrar palabras de parada comunes
+        var stopWords = new HashSet<string> 
+        { 
+            "el", "la", "de", "que", "y", "en", "un", "es", "se", "no", "te", "lo", "le", "da", "su", "por", "son", "con", "para", "al", "del", "los", "las", "una", "como", "pero", "sus", "fue", "ser", "todo", "está", "muy", "ya", "o", "cuando", "si", "más", "hasta", "sobre", "también", "me", "mi", "yo", "tú", "él", "ella", "nosotros", "ustedes", "ellos", "ellas", "tiene", "tienen", "cuántas", "cuántos", "cómo", "dónde", "qué", "quién", "cuál", "cuáles", "líneas", "archivo", "documento"
+        };
+        
+        var relevantKeywords = keywords.Where(k => k.Length > 2 && !stopWords.Contains(k)).ToList();
+        
+        // Si no hay palabras relevantes, usar todas
+        if (!relevantKeywords.Any())
+        {
+            relevantKeywords = keywords.ToList();
+        }
+        
         var filteredDocuments = _mockDocuments.Where(doc =>
-            keywords.Any(keyword => 
+            relevantKeywords.Any(keyword => 
                 doc.Name.ToLower().Contains(keyword) || 
                 doc.Content.ToLower().Contains(keyword)
             )).ToList();

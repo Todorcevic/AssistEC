@@ -3,6 +3,7 @@ using Microsoft.Graph.Models;
 using Azure.Identity;
 using AssistEC.Models;
 using System.Text.Json;
+using AssistEC.Services.Abstractions;
 
 namespace AssistEC.Services;
 

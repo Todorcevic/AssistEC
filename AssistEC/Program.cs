@@ -1,11 +1,20 @@
 using AssistEC.Components;
 using AssistEC.Services;
+using AssistEC.Models;
+using AssistEC.Services.Abstractions;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+// Configure settings
+builder.Services.Configure<DocumentContextSettings>(
+    builder.Configuration.GetSection("DocumentContext"));
+
+// Add memory cache
+builder.Services.AddMemoryCache();
 
 // Register custom services
 // Permitir configurar qué servicio de SharePoint usar
@@ -23,6 +32,9 @@ else
     Console.WriteLine("📡 Using real SharePointService - ensure credentials are configured");
 }
 
+// Register AI services
+builder.Services.AddScoped<IEmbeddingService, EmbeddingService>();
+builder.Services.AddScoped<IDocumentContextService, DocumentContextService>();
 builder.Services.AddScoped<OpenAIService>();
 
 var app = builder.Build();

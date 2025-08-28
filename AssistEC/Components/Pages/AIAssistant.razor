@@ -1,6 +1,7 @@
 @page "/ai-assistant"
 @using AssistEC.Models
 @using AssistEC.Services
+@using AssistEC.Services.Abstractions
 @rendermode InteractiveServer
 @inject ISharePointService SharePointService
 @inject OpenAIService OpenAIService
@@ -74,6 +75,21 @@
                                 </div>
                             </div>
                         }
+                    </div>
+                    
+                    <div class="d-flex mb-2">
+                        <button @onclick="ClearConversation" 
+                                class="btn btn-outline-secondary btn-sm me-auto"
+                                disabled="@(isLoading || !messages.Any())">
+                            <i class="fas fa-trash me-1"></i>
+                            Limpiar conversación
+                        </button>
+                        <small class="text-muted align-self-center">
+                            @if (messages.Any())
+                            {
+                                @($"{messages.Count} mensajes")
+                            }
+                        </small>
                     </div>
                     
                     <div class="input-group">
@@ -242,15 +258,19 @@
 
         try
         {
-            // Generar consulta de búsqueda optimizada
-            var searchQuery = await OpenAIService.GenerateSearchQueryAsync(query);
+            // Obtener historial de conversación para contexto
+            var conversationHistory = messages.Where(m => m.Role != "system").ToList();
             
-            // Buscar documentos relevantes
+            // Generar consulta de búsqueda expandida considerando el historial
+            var expandedSearchQuery = await OpenAIService.GenerateExpandedQueryAsync(query, conversationHistory);
+            var searchQuery = await OpenAIService.GenerateSearchQueryAsync(expandedSearchQuery);
+            
+            // Buscar documentos relevantes usando la consulta expandida
             var documents = await SharePointService.SearchDocumentsAsync(searchQuery); // Usar documentos relevantes
             //var documents = await SharePointService.GetRecentDocumentsAsync(); // Alternativa: usar documentos recientes (Todos)
             
-            // Procesar la consulta con OpenAI
-            var response = await OpenAIService.ProcessQueryWithDocumentsAsync(query, documents);
+            // Procesar la consulta con OpenAI incluyendo historial de conversación
+            var response = await OpenAIService.ProcessQueryWithDocumentsAsync(query, documents, conversationHistory);
             
             var assistantMessage = new ChatMessage
             {
@@ -325,6 +345,12 @@
     {
         await Task.Delay(100);
         await JSRuntime.InvokeVoidAsync("scrollToBottom", "chatContainer");
+    }
+
+    private void ClearConversation()
+    {
+        messages.Clear();
+        StateHasChanged();
     }
 
     private string FormatMessageContent(string content)
